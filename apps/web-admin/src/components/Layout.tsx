@@ -58,7 +58,7 @@ const s: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     padding: '1.25rem 1rem',
   },
-  brand: { fontSize: '1.1rem', fontWeight: 700, color: '#d4af37', marginBottom: '2rem', paddingLeft: '0.25rem' },
+  brand: { fontSize: '1.1rem', fontWeight: 700, color: '#9c6eff', marginBottom: '2rem', paddingLeft: '0.25rem' },
   nav: { flex: 1 },
   userArea: { borderTop: '1px solid #222', paddingTop: '1rem' },
   userName: { margin: '0 0 0.1rem', fontSize: '0.85rem', fontWeight: 600 },

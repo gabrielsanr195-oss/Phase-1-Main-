@@ -146,7 +146,7 @@ const s: Record<string, React.CSSProperties> = {
   pageHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' },
   h1: { margin: 0, fontSize: '1.5rem', fontWeight: 700 },
   h2: { margin: '0 0 1rem', fontSize: '1.1rem', fontWeight: 600 },
-  primaryBtn: { backgroundColor: '#d4af37', color: '#000', border: 'none', borderRadius: '7px', padding: '0.55rem 1.1rem', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' },
+  primaryBtn: { backgroundColor: '#9c6eff', color: '#fff', border: 'none', borderRadius: '7px', padding: '0.55rem 1.1rem', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' },
   formCard: { backgroundColor: '#1a1a1a', borderRadius: '10px', padding: '1.5rem', marginBottom: '2rem' },
   form: { display: 'flex', flexDirection: 'column', gap: '0.75rem' },
   row: { display: 'flex', gap: '1rem', flexWrap: 'wrap' },

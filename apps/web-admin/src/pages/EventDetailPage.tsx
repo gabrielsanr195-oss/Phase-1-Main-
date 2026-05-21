@@ -47,7 +47,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 const STATUS_COLOR: Record<string, string> = {
   en_lista: '#4a9eff', confirmed: '#4caf50', rejected: '#e55',
-  paid: '#d4af37', checked_in: '#9c6eff', checked_out: '#666',
+  paid: '#9c6eff', checked_in: '#9c6eff', checked_out: '#666',
 };
 
 const EMPTY_TIER = { name: '', price: '', currency: 'GTQ', maxQuantity: '' };
@@ -414,7 +414,7 @@ function GuestActions({ ge, loading, onUpdate }: {
     case 'en_lista': return <>{btn('Confirmar', 'confirmed', '#1a3a1a')}{btn('Rechazar', 'rejected', '#3a1a1a')}</>;
     case 'confirmed': return <>{btn('Rechazar', 'rejected', '#3a1a1a')}{btn('Pagado + QR', 'paid', '#3a3010')}</>;
     case 'rejected': return <>{btn('Restablecer', 'en_lista')}</>;
-    case 'paid': return <span style={{ color: '#d4af37', fontSize: '0.8rem' }}>{ge.qr_token ? '✓ QR emitido' : 'QR pendiente'}</span>;
+    case 'paid': return <span style={{ color: '#9c6eff', fontSize: '0.8rem' }}>{ge.qr_token ? '✓ QR emitido' : 'QR pendiente'}</span>;
     case 'checked_in': return <span style={{ color: '#9c6eff', fontSize: '0.8rem' }}>✓ Adentro</span>;
     default: return null;
   }
@@ -425,7 +425,7 @@ const actionS: Record<string, React.CSSProperties> = {
 };
 
 const TYPE_LABEL: Record<string, string> = { bottle: 'Botella', drink: 'Bebida', shot: 'Shot' };
-const TYPE_COLOR: Record<string, string> = { bottle: '#d4af37', drink: '#4a9eff', shot: '#9c6eff' };
+const TYPE_COLOR: Record<string, string> = { bottle: '#9c6eff', drink: '#4a9eff', shot: '#9c6eff' };
 
 function InventoryTab({
   eventId, products, inventory, invForm, setInvForm, onSave,
@@ -589,7 +589,7 @@ function ProductsTab({
                           {TYPE_LABEL[item.product_type]}
                         </span>
                         <span>{item.product_name}</span>
-                        <span style={{ color: '#d4af37', fontWeight: 700 }}>×{item.quantity}</span>
+                        <span style={{ color: '#9c6eff', fontWeight: 700 }}>×{item.quantity}</span>
                         <button style={s.removeBtn} onClick={() => onRemoveTierItem(tier.id, item.product_id)}>×</button>
                       </div>
                     ))}
@@ -649,13 +649,13 @@ const s: Record<string, React.CSSProperties> = {
   tabBtn: { background: 'none', border: 'none', color: '#888', fontSize: '0.9rem', cursor: 'pointer', padding: '0.4rem 0.75rem', borderRadius: '6px' },
   tabActive: { backgroundColor: '#2a2a2a', color: '#f0f0f0' },
   sectionHeader: { display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' },
-  primaryBtn: { backgroundColor: '#d4af37', color: '#000', border: 'none', borderRadius: '7px', padding: '0.5rem 1rem', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' },
+  primaryBtn: { backgroundColor: '#9c6eff', color: '#fff', border: 'none', borderRadius: '7px', padding: '0.5rem 1rem', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' },
   formInline: { display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', backgroundColor: '#1a1a1a', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' },
   input: { backgroundColor: '#2a2a2a', border: '1px solid #3a3a3a', borderRadius: '6px', padding: '0.5rem 0.65rem', color: '#f0f0f0', fontSize: '0.88rem', outline: 'none', flex: 1, minWidth: '120px' },
   tierList: { display: 'flex', flexDirection: 'column', gap: '0.5rem' },
   tierCard: { backgroundColor: '#1a1a1a', borderRadius: '8px', padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '1.25rem' },
   tierName: { fontWeight: 600, flex: 1 },
-  tierPrice: { color: '#d4af37', fontWeight: 700 },
+  tierPrice: { color: '#9c6eff', fontWeight: 700 },
   tierMeta: { color: '#888', fontSize: '0.85rem' },
   productCatalog: { display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' },
   productChip: { display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#1a1a1a', borderRadius: '7px', padding: '0.5rem 0.75rem', fontSize: '0.88rem' },

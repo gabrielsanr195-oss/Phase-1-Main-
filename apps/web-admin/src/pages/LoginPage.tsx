@@ -63,10 +63,10 @@ export default function LoginPage() {
 const s: Record<string, React.CSSProperties> = {
   page: { minHeight: '100vh', backgroundColor: '#0f0f0f', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   card: { backgroundColor: '#1a1a1a', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '380px', color: '#f0f0f0' },
-  title: { fontSize: '1.4rem', fontWeight: 700, margin: '0 0 1.5rem', color: '#d4af37' },
+  title: { fontSize: '1.4rem', fontWeight: 700, margin: '0 0 1.5rem', color: '#9c6eff' },
   form: { display: 'flex', flexDirection: 'column', gap: '0.5rem' },
   label: { fontSize: '0.8rem', color: '#aaa', marginTop: '0.5rem' },
   input: { backgroundColor: '#2a2a2a', border: '1px solid #3a3a3a', borderRadius: '6px', padding: '0.6rem 0.75rem', color: '#f0f0f0', fontSize: '0.95rem', outline: 'none' },
   error: { color: '#e55', fontSize: '0.85rem', margin: '0.25rem 0' },
-  btn: { marginTop: '1rem', backgroundColor: '#d4af37', color: '#000', border: 'none', borderRadius: '7px', padding: '0.75rem', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' },
+  btn: { marginTop: '1rem', backgroundColor: '#9c6eff', color: '#fff', border: 'none', borderRadius: '7px', padding: '0.75rem', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' },
 };
