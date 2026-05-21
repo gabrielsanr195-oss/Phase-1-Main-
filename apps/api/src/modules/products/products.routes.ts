@@ -3,6 +3,13 @@ import { ProductsService, ProductError } from './products.service';
 import { createProductSchema, addPassTierItemSchema } from './products.schema';
 import type { CreateProductBody, AddPassTierItemBody } from './products.schema';
 
+interface SetInventoryBody {
+  quantity: number;
+  subLocation?: string;
+  alertYellow?: number;
+  alertOrange?: number;
+}
+
 export default async function productsRoutes(app: FastifyInstance) {
   const svc = new ProductsService(app.db);
 
@@ -61,6 +68,43 @@ export default async function productsRoutes(app: FastifyInstance) {
       if (req.user.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
       await svc.removePassTierItem(req.venueId, req.params.tierId, req.params.productId);
       return reply.status(204).send();
+    },
+  );
+
+  // GET /products/inventory?eventId=
+  app.get<{ Querystring: { eventId: string } }>(
+    '/inventory',
+    { onRequest: [app.authenticate] },
+    async (req, reply) => {
+      if (!['admin', 'warehouse', 'bartender'].includes(req.user.role)) {
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
+      if (!req.query.eventId) return reply.status(400).send({ error: 'eventId required' });
+      return svc.listInventory(req.venueId, req.query.eventId);
+    },
+  );
+
+  // PUT /products/inventory/:eventId/:productId — upsert stock level
+  app.put<{ Params: { eventId: string; productId: string }; Body: SetInventoryBody }>(
+    '/inventory/:eventId/:productId',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['quantity'],
+          properties: {
+            quantity: { type: 'integer', minimum: 0 },
+            subLocation: { type: 'string' },
+            alertYellow: { type: 'integer', minimum: 0 },
+            alertOrange: { type: 'integer', minimum: 0 },
+          },
+        },
+      },
+      onRequest: [app.authenticate],
+    },
+    async (req, reply) => {
+      if (req.user.role !== 'admin') return reply.status(403).send({ error: 'Forbidden' });
+      return svc.upsertInventory(req.venueId, req.params.eventId, req.params.productId, req.body);
     },
   );
 }

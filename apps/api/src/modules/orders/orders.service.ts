@@ -186,10 +186,27 @@ export class OrdersService {
     }
   }
 
-  async listOrders(venueId: string, eventId: string, guestEventId?: string) {
-    const params: string[] = [venueId, eventId];
-    const guestFilter = guestEventId ? 'AND o.guest_event_id = $3' : '';
-    if (guestEventId) params.push(guestEventId);
+  async listOrders(
+    venueId: string,
+    eventId: string,
+    opts: { guestEventId?: string; destination?: string; statuses?: number[] } = {},
+  ) {
+    const params: Array<string | number | number[]> = [venueId, eventId];
+    const filters: string[] = [];
+
+    if (opts.guestEventId) {
+      params.push(opts.guestEventId);
+      filters.push(`AND o.guest_event_id = $${params.length}`);
+    }
+    if (opts.destination) {
+      params.push(opts.destination);
+      filters.push(`AND o.destination = $${params.length}`);
+    }
+    if (opts.statuses && opts.statuses.length > 0) {
+      params.push(opts.statuses as unknown as string);
+      filters.push(`AND o.status = ANY($${params.length})`);
+    }
+    const guestFilter = filters.join(' ');
 
     const result = await this.db.query(
       `SELECT o.*,
@@ -220,26 +237,66 @@ export class OrdersService {
   }
 
   async advanceStatus(venueId: string, orderId: string, newStatus: number) {
-    const current = await this.db.query<{ status: number }>(
-      `SELECT status FROM orders WHERE id = $1 AND venue_id = $2`,
-      [orderId, venueId],
-    );
-    if (current.rows.length === 0) throw new OrderError('Order not found', 404);
-    const cur = current.rows[0]!.status;
-    if (newStatus !== cur + 1) throw new OrderError('Status must advance by exactly one step', 422);
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
 
-    const tsFields: Record<number, string> = {
-      3: ', dispatched_at = NOW()',
-      4: ', received_at = NOW()',
-      5: ', delivered_at = NOW()',
-    };
-    const extra = tsFields[newStatus] ?? '';
+      const current = await client.query<{ status: number; event_id: string }>(
+        `SELECT status, event_id FROM orders WHERE id = $1 AND venue_id = $2`,
+        [orderId, venueId],
+      );
+      if (current.rows.length === 0) throw new OrderError('Order not found', 404);
+      const { status: cur, event_id: eventId } = current.rows[0]!;
+      if (newStatus !== cur + 1) throw new OrderError('Status must advance by exactly one step', 422);
 
-    const result = await this.db.query(
-      `UPDATE orders SET status = $1 ${extra} WHERE id = $2 AND venue_id = $3 RETURNING *`,
-      [newStatus, orderId, venueId],
-    );
-    return result.rows[0]!;
+      // State 3 = dispatch: decrement inventory
+      if (newStatus === 3) {
+        const items = await client.query<{ product_id: string; quantity: number }>(
+          `SELECT product_id, quantity FROM order_items WHERE order_id = $1 AND venue_id = $2`,
+          [orderId, venueId],
+        );
+        for (const item of items.rows) {
+          const inv = await client.query<{ quantity: number }>(
+            `UPDATE event_inventory
+             SET quantity = quantity - $1
+             WHERE event_id = $2 AND product_id = $3 AND venue_id = $4 AND quantity >= $1
+             RETURNING quantity`,
+            [item.quantity, eventId, item.product_id, venueId],
+          );
+          // No rows = either not configured (allowed) or insufficient stock
+          if (inv.rows.length === 0) {
+            const exists = await client.query(
+              `SELECT 1 FROM event_inventory WHERE event_id = $1 AND product_id = $2 AND venue_id = $3`,
+              [eventId, item.product_id, venueId],
+            );
+            if (exists.rows.length > 0) {
+              throw new OrderError('Insufficient inventory to dispatch', 422);
+            }
+            // Not configured — skip decrement (inventory tracking optional)
+          }
+        }
+      }
+
+      const tsFields: Record<number, string> = {
+        3: ', dispatched_at = NOW()',
+        4: ', received_at = NOW()',
+        5: ', delivered_at = NOW()',
+      };
+      const extra = tsFields[newStatus] ?? '';
+
+      const result = await client.query(
+        `UPDATE orders SET status = $1 ${extra} WHERE id = $2 AND venue_id = $3 RETURNING *`,
+        [newStatus, orderId, venueId],
+      );
+
+      await client.query('COMMIT');
+      return result.rows[0]!;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 }
 

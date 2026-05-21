@@ -15,6 +15,10 @@ interface PassTier {
 interface Product {
   id: string; name: string; type: 'bottle' | 'drink' | 'shot'; sku: string | null; is_active: boolean;
 }
+interface InventoryItem {
+  id: string; product_id: string; product_name: string; product_type: string;
+  sub_location: string; quantity: number; alert_yellow: number | null; alert_orange: number | null;
+}
 interface PassTierItem {
   id: string; product_id: string; product_name: string; product_type: string;
   quantity: number; pass_tier_id: string;
@@ -25,7 +29,7 @@ interface GuestEvent {
   tier_name: string | null; price: string | null; currency: string | null;
 }
 
-type Tab = 'guests' | 'pass-tiers' | 'products';
+type Tab = 'guests' | 'pass-tiers' | 'products' | 'inventory';
 
 const PHASE_ORDER = ['phase_0', 'phase_1', 'phase_2', 'phase_3', 'phase_4', 'closed'];
 const PHASE_LABEL: Record<string, string> = {
@@ -68,19 +72,23 @@ export default function EventDetailPage() {
   const [productError, setProductError] = useState<string | null>(null);
   const [showProductForm, setShowProductForm] = useState(false);
   const [addItemState, setAddItemState] = useState<Record<string, { productId: string; quantity: string }>>({});
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [invForm, setInvForm] = useState<Record<string, string>>({});
 
   const fetchAll = useCallback(async () => {
     if (!id) return;
-    const [ev, ts, gs, prods] = await Promise.all([
+    const [ev, ts, gs, prods, inv] = await Promise.all([
       get<Event>(`/events/${id}`),
       get<PassTier[]>(`/events/${id}/pass-tiers`),
       get<GuestEvent[]>(`/guests?eventId=${id}`),
       get<Product[]>('/products'),
+      get<InventoryItem[]>(`/products/inventory?eventId=${id}`),
     ]);
     setEvent(ev);
     setTiers(ts);
     setGuests(gs);
     setProducts(prods);
+    setInventory(inv);
     // Load tier items for each tier
     const items: Record<string, PassTierItem[]> = {};
     await Promise.all(
@@ -239,6 +247,9 @@ export default function EventDetailPage() {
         <button style={{ ...s.tabBtn, ...(tab === 'products' ? s.tabActive : {}) }} onClick={() => setTab('products')}>
           Productos ({products.length})
         </button>
+        <button style={{ ...s.tabBtn, ...(tab === 'inventory' ? s.tabActive : {}) }} onClick={() => setTab('inventory')}>
+          Inventario ({inventory.length})
+        </button>
       </div>
 
       {/* Pass Tiers tab */}
@@ -271,6 +282,27 @@ export default function EventDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Inventory tab */}
+      {tab === 'inventory' && id && (
+        <InventoryTab
+          eventId={id}
+          products={products}
+          inventory={inventory}
+          invForm={invForm}
+          setInvForm={setInvForm}
+          onSave={async (productId, quantity) => {
+            try {
+              await patch(`/products/inventory/${id}/${productId}`, {
+                quantity: parseInt(quantity, 10),
+              });
+              await fetchAll();
+            } catch (err) {
+              /* ignore for now */
+            }
+          }}
+        />
       )}
 
       {/* Products tab */}
@@ -394,6 +426,87 @@ const actionS: Record<string, React.CSSProperties> = {
 
 const TYPE_LABEL: Record<string, string> = { bottle: 'Botella', drink: 'Bebida', shot: 'Shot' };
 const TYPE_COLOR: Record<string, string> = { bottle: '#d4af37', drink: '#4a9eff', shot: '#9c6eff' };
+
+function InventoryTab({
+  eventId, products, inventory, invForm, setInvForm, onSave,
+}: {
+  eventId: string;
+  products: Product[];
+  inventory: InventoryItem[];
+  invForm: Record<string, string>;
+  setInvForm: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  onSave: (productId: string, quantity: string) => void;
+}) {
+  const invMap = new Map(inventory.map((i) => [i.product_id, i]));
+
+  function alertColor(qty: number, inv: InventoryItem | undefined): string {
+    if (!inv) return '#f0f0f0';
+    if (inv.alert_orange !== null && qty <= inv.alert_orange) return '#ff4a6e';
+    if (inv.alert_yellow !== null && qty <= inv.alert_yellow) return '#ff9f4a';
+    return '#4caf50';
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom: '1rem', color: '#888', fontSize: '0.85rem' }}>
+        Configura el stock inicial de cada producto para este evento.
+        El inventario se decrementa automáticamente al despachar (Estado 3).
+      </div>
+      {products.length === 0 && <p style={{ color: '#666' }}>Agrega productos primero en la pestaña Productos.</p>}
+      <div style={s.tableWrap}>
+        <table style={s.table}>
+          <thead>
+            <tr>
+              {['Producto', 'Tipo', 'Stock', 'Nuevo stock', ''].map((h) => (
+                <th key={h} style={s.th}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((p) => {
+              const inv = invMap.get(p.id);
+              const currentQty = inv?.quantity ?? null;
+              const formVal = invForm[p.id] ?? '';
+              return (
+                <tr key={p.id} style={s.tr}>
+                  <td style={s.td}>{p.name}</td>
+                  <td style={s.td}>
+                    <span style={{ ...s.badge, backgroundColor: TYPE_COLOR[p.type] ?? '#555' }}>
+                      {TYPE_LABEL[p.type]}
+                    </span>
+                  </td>
+                  <td style={s.td}>
+                    {currentQty !== null
+                      ? <span style={{ fontWeight: 700, color: alertColor(currentQty, inv) }}>{currentQty}</span>
+                      : <span style={{ color: '#555' }}>—</span>
+                    }
+                  </td>
+                  <td style={s.td}>
+                    <input
+                      style={{ ...s.input, width: '80px', padding: '0.35rem 0.5rem', fontSize: '0.85rem' }}
+                      type="number" min="0" placeholder={currentQty?.toString() ?? '0'}
+                      value={formVal}
+                      onChange={(e) => setInvForm((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                    />
+                  </td>
+                  <td style={s.td}>
+                    <button
+                      style={{ ...actionS.btn, backgroundColor: '#1a3a1a' }}
+                      disabled={!formVal}
+                      onClick={() => { onSave(p.id, formVal); setInvForm((prev) => ({ ...prev, [p.id]: '' })); }}
+                    >
+                      Guardar
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function ProductsTab({
   products, tiers, tierItems, newProduct, setNewProduct, showForm, setShowForm,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { get, post, ApiError } from '../api/client';
+import { get, post, patch, ApiError } from '../api/client';
 
 interface Product {
   id: string; name: string; type: 'bottle' | 'drink' | 'shot'; sku: string | null;
@@ -20,9 +20,14 @@ interface CreatedOrder {
   id: string; type: string; destination: string; itemCount: number;
 }
 
+interface OpenOrder {
+  id: string; type: string; destination: string; status: number;
+  items: Array<{ productName: string; quantity: number }>;
+}
+
 type ViewState =
   | { kind: 'scan' }
-  | { kind: 'order'; guest: GuestLookup; products: Product[] }
+  | { kind: 'order'; guest: GuestLookup; products: Product[]; openOrders: OpenOrder[] }
   | { kind: 'done'; orders: CreatedOrder[]; guest: GuestLookup };
 
 const TYPE_LABEL: Record<string, string> = { bottle: 'Botella', drink: 'Bebida', shot: 'Shot' };
@@ -63,10 +68,13 @@ export default function WaiterPage() {
         setScanError(`Invitado en estado "${guest.status}" — debe haber hecho check-in primero`);
         return;
       }
+      const openOrders = await get<OpenOrder[]>(
+        `/orders?eventId=${guest.eventId}&guestEventId=${guest.guestEventId}&statuses=3,4`,
+      );
       setQuantities({});
       setTableRef('');
       setOrderError(null);
-      setView({ kind: 'order', guest, products: products.filter((p) => p.type !== 'shot') });
+      setView({ kind: 'order', guest, products: products.filter((p) => p.type !== 'shot'), openOrders });
     } catch (err) {
       setScanError(err instanceof ApiError ? err.message : 'QR inválido');
     } finally {
@@ -125,9 +133,24 @@ export default function WaiterPage() {
     );
   }
 
+  async function advanceOrder(orderId: string, nextStatus: number) {
+    if (view.kind !== 'order') return;
+    try {
+      await patch(`/orders/${orderId}/status`, { status: nextStatus });
+      const openOrders = await get<OpenOrder[]>(
+        `/orders?eventId=${view.guest.eventId}&guestEventId=${view.guest.guestEventId}&statuses=3,4`,
+      );
+      setView({ ...view, openOrders });
+    } catch (err) {
+      setOrderError(err instanceof ApiError ? err.message : 'Error');
+    }
+  }
+
   if (view.kind === 'order') {
-    const { guest, products } = view;
+    const { guest, products, openOrders } = view;
     const balanceMap = new Map(guest.passBalance.map((b) => [b.productId, b]));
+    const readyToPickUp = openOrders.filter((o) => o.status === 3);
+    const readyToDeliver = openOrders.filter((o) => o.status === 4);
 
     return (
       <div style={s.page}>
@@ -140,6 +163,39 @@ export default function WaiterPage() {
             </div>
             <button style={s.resetBtn} onClick={() => setView({ kind: 'scan' })}>× Cambiar</button>
           </div>
+
+          {/* Open orders: ready to pick up or deliver */}
+          {(readyToPickUp.length > 0 || readyToDeliver.length > 0) && (
+            <div style={{ ...s.balanceBox, marginBottom: '1rem', borderLeft: '2px solid #ff9f4a' }}>
+              <div style={s.balanceTitle}>Comandas abiertas</div>
+              {readyToPickUp.map((o) => (
+                <div key={o.id} style={s.openOrderRow}>
+                  <span style={{ color: '#ff9f4a', fontSize: '0.78rem', fontWeight: 600 }}>
+                    RECOGER en {o.destination === 'warehouse' ? 'Bodega' : 'Bar'}
+                  </span>
+                  <span style={{ color: '#bbb', fontSize: '0.82rem' }}>
+                    {o.items.map((i) => `${i.productName} ×${i.quantity}`).join(', ')}
+                  </span>
+                  <button style={{ ...s.btn, marginTop: 0, padding: '0.3rem 0.6rem', fontSize: '0.78rem' }}
+                    onClick={() => void advanceOrder(o.id, 4)}>
+                    Recibido
+                  </button>
+                </div>
+              ))}
+              {readyToDeliver.map((o) => (
+                <div key={o.id} style={s.openOrderRow}>
+                  <span style={{ color: '#4caf50', fontSize: '0.78rem', fontWeight: 600 }}>ENTREGAR AL INVITADO</span>
+                  <span style={{ color: '#bbb', fontSize: '0.82rem' }}>
+                    {o.items.map((i) => `${i.productName} ×${i.quantity}`).join(', ')}
+                  </span>
+                  <button style={{ ...s.btn, marginTop: 0, padding: '0.3rem 0.6rem', fontSize: '0.78rem', backgroundColor: '#1a3a1a' }}
+                    onClick={() => void advanceOrder(o.id, 5)}>
+                    Entregado
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Pass balance summary */}
           {guest.passBalance.length > 0 && (
@@ -237,6 +293,7 @@ const s: Record<string, React.CSSProperties> = {
   guestSub: { fontSize: '0.82rem', color: '#888', marginTop: '0.15rem' },
   resetBtn: { background: 'none', border: '1px solid #3a3a3a', color: '#888', borderRadius: '5px', padding: '0.3rem 0.5rem', cursor: 'pointer', fontSize: '0.8rem' },
   balanceBox: { backgroundColor: '#111', borderRadius: '8px', padding: '0.75rem 1rem', marginBottom: '1rem' },
+  openOrderRow: { display: 'flex', flexDirection: 'column', gap: '0.25rem', padding: '0.4rem 0', borderBottom: '1px solid #2a2a2a' },
   balanceTitle: { fontSize: '0.72rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', fontWeight: 600 },
   balanceGrid: { display: 'flex', flexWrap: 'wrap', gap: '0.5rem' },
   balanceItem: { display: 'flex', gap: '0.4rem', alignItems: 'center', backgroundColor: '#1a1a1a', borderRadius: '5px', padding: '0.3rem 0.6rem' },

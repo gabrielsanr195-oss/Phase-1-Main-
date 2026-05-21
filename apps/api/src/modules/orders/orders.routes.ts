@@ -53,8 +53,10 @@ export default async function ordersRoutes(app: FastifyInstance) {
     },
   );
 
-  // GET /orders?eventId=&guestEventId=
-  app.get<{ Querystring: { eventId: string; guestEventId?: string } }>(
+  // GET /orders?eventId=&guestEventId=&destination=&statuses=1,2
+  app.get<{
+    Querystring: { eventId: string; guestEventId?: string; destination?: string; statuses?: string };
+  }>(
     '/',
     { onRequest: [app.authenticate] },
     async (req, reply) => {
@@ -62,7 +64,14 @@ export default async function ordersRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden' });
       }
       if (!req.query.eventId) return reply.status(400).send({ error: 'eventId required' });
-      return svc.listOrders(req.venueId, req.query.eventId, req.query.guestEventId);
+      const statuses = req.query.statuses
+        ? req.query.statuses.split(',').map(Number).filter((n) => !isNaN(n))
+        : undefined;
+      return svc.listOrders(req.venueId, req.query.eventId, {
+        guestEventId: req.query.guestEventId,
+        destination: req.query.destination,
+        statuses,
+      });
     },
   );
 

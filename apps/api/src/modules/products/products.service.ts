@@ -58,6 +58,43 @@ export class ProductsService {
       [passTierId, productId, venueId],
     );
   }
+
+  async listInventory(venueId: string, eventId: string) {
+    const result = await this.db.query(
+      `SELECT ei.*, p.name AS product_name, p.type AS product_type, p.sku
+       FROM event_inventory ei
+       JOIN products p ON p.id = ei.product_id
+       WHERE ei.event_id = $1 AND ei.venue_id = $2
+       ORDER BY ei.sub_location, p.type, p.name`,
+      [eventId, venueId],
+    );
+    return result.rows;
+  }
+
+  async upsertInventory(
+    venueId: string,
+    eventId: string,
+    productId: string,
+    input: { quantity: number; subLocation?: string; alertYellow?: number; alertOrange?: number },
+  ) {
+    const result = await this.db.query(
+      `INSERT INTO event_inventory (venue_id, event_id, product_id, sub_location, quantity, alert_yellow, alert_orange)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (event_id, product_id, sub_location) DO UPDATE SET
+         quantity = EXCLUDED.quantity,
+         alert_yellow = COALESCE(EXCLUDED.alert_yellow, event_inventory.alert_yellow),
+         alert_orange = COALESCE(EXCLUDED.alert_orange, event_inventory.alert_orange)
+       RETURNING *`,
+      [
+        venueId, eventId, productId,
+        input.subLocation ?? 'main',
+        input.quantity,
+        input.alertYellow ?? null,
+        input.alertOrange ?? null,
+      ],
+    );
+    return result.rows[0]!;
+  }
 }
 
 export class ProductError extends Error {

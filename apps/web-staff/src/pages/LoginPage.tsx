@@ -26,7 +26,7 @@ export default function LoginPage() {
     setError(null);
     try {
       const res = await post<LoginResponse>('/auth/login', form);
-      if (!['door', 'admin', 'keyholder'].includes(res.user.role)) {
+      if (!['door', 'admin', 'keyholder', 'waiter', 'warehouse', 'bartender'].includes(res.user.role)) {
         setError('Acceso no autorizado para este rol.');
         return;
       }
