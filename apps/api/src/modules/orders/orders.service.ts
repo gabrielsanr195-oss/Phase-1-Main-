@@ -1,3 +1,14 @@
+// ERP Module — Orders Service
+//
+// ARCHITECTURAL BOUNDARY:
+//   This service belongs to the ERP system (products / orders / inventory).
+//   It must NOT import from Ticketing services (events, guests, share-links, door).
+//   The only allowed cross-system access is reading guest_events + pass_tier_items
+//   via SQL when a guest QR is optionally provided by the caller.
+//
+//   Inventory can never block guest entry/exit — that is enforced in door.service.ts
+//   which has zero dependency on ERP tables.
+
 import type { Pool } from 'pg';
 import type { CreateOrderBody } from './orders.schema';
 
@@ -8,6 +19,7 @@ type GroupKey = `${OrderType}-${Destination}`;
 export class OrdersService {
   constructor(private readonly db: Pool) {}
 
+  // ── Ticketing bridge — only called when waiter scans a guest QR ─────────────
   async lookupGuest(venueId: string, guestEventId: string) {
     const result = await this.db.query(
       `SELECT ge.id, ge.event_id, ge.pass_tier_id, ge.status,
@@ -50,7 +62,6 @@ export class OrdersService {
     );
     if (tierItems.rows.length === 0) return [];
 
-    // Count delivered pass items for this guest
     const consumed = await this.db.query<{ product_id: string; consumed: string }>(
       `SELECT oi.product_id, SUM(oi.quantity) AS consumed
        FROM order_items oi
@@ -71,25 +82,13 @@ export class OrdersService {
     }));
   }
 
+  // ── Create order — works with or without a guest QR ─────────────────────────
   async createOrder(venueId: string, waiterId: string, input: CreateOrderBody) {
     const client = await this.db.connect();
     try {
       await client.query('BEGIN');
 
-      // Validate guest_event
-      const geResult = await client.query<{
-        id: string; event_id: string; pass_tier_id: string | null; status: string;
-      }>(
-        `SELECT id, event_id, pass_tier_id, status
-         FROM guest_events WHERE id = $1 AND venue_id = $2`,
-        [input.guestEventId, venueId],
-      );
-      if (geResult.rows.length === 0) throw new OrderError('Guest not found', 404);
-      const ge = geResult.rows[0]!;
-      if (ge.status !== 'checked_in') throw new OrderError('Guest has not checked in', 422);
-      if (ge.event_id !== input.eventId) throw new OrderError('Event mismatch', 422);
-
-      // Fetch products
+      // Fetch products (ERP-only concern)
       const productIds = input.items.map((i) => i.productId);
       const productsResult = await client.query<{ id: string; type: string; name: string }>(
         `SELECT id, type, name FROM products WHERE id = ANY($1) AND venue_id = $2 AND is_active = true`,
@@ -97,15 +96,59 @@ export class OrdersService {
       );
       const productsMap = new Map(productsResult.rows.map((p) => [p.id, p]));
 
-      // Validate all items exist and block shots
       for (const item of input.items) {
         const p = productsMap.get(item.productId);
         if (!p) throw new OrderError(`Product ${item.productId} not found`, 404);
         if (p.type === 'shot') throw new OrderError('Shots must be ordered directly at the bar', 422);
       }
 
-      // Build pass allocation map (remaining pass items for this guest)
-      const passAlloc = new Map<string, number>(); // productId → remaining
+      // ── PATH A: Plain table order — no guest, all items are 'extra' ──────────
+      if (!input.guestEventId) {
+        const groups = new Map<`extra-${Destination}`, Array<{ productId: string; quantity: number }>>();
+        for (const reqItem of input.items) {
+          const product = productsMap.get(reqItem.productId)!;
+          const destination: Destination = product.type === 'bottle' ? 'warehouse' : 'bar';
+          const key = `extra-${destination}` as const;
+          const arr = groups.get(key) ?? [];
+          arr.push({ productId: reqItem.productId, quantity: reqItem.quantity });
+          groups.set(key, arr);
+        }
+
+        const createdOrders: Array<{ id: string; type: string; destination: string; itemCount: number }> = [];
+        for (const [key, items] of groups) {
+          const [, destination] = key.split('-') as ['extra', Destination];
+          const orderResult = await client.query<{ id: string }>(
+            `INSERT INTO orders (venue_id, event_id, guest_event_id, waiter_id, type, destination, table_ref, notes)
+             VALUES ($1,$2,NULL,$3,'extra',$4,$5,$6) RETURNING id`,
+            [venueId, input.eventId, waiterId, destination, input.tableRef, input.notes ?? null],
+          );
+          const orderId = orderResult.rows[0]!.id;
+          for (const item of items) {
+            await client.query(
+              `INSERT INTO order_items (venue_id, order_id, product_id, quantity, unit_price)
+               VALUES ($1,$2,$3,$4,0)`,
+              [venueId, orderId, item.productId, item.quantity],
+            );
+          }
+          createdOrders.push({ id: orderId, type: 'extra', destination, itemCount: items.length });
+        }
+
+        await client.query('COMMIT');
+        return createdOrders;
+      }
+
+      // ── PATH B: Guest order — apply pass balance when available ─────────────
+      const geResult = await client.query<{
+        id: string; event_id: string; pass_tier_id: string | null;
+      }>(
+        `SELECT id, event_id, pass_tier_id FROM guest_events WHERE id = $1 AND venue_id = $2`,
+        [input.guestEventId, venueId],
+      );
+      if (geResult.rows.length === 0) throw new OrderError('Guest not found', 404);
+      const ge = geResult.rows[0]!;
+      if (ge.event_id !== input.eventId) throw new OrderError('Guest does not belong to this event', 422);
+
+      const passAlloc = new Map<string, number>();
       if (ge.pass_tier_id) {
         const tierItems = await client.query<{ product_id: string; quantity: number }>(
           `SELECT product_id, quantity FROM pass_tier_items WHERE pass_tier_id = $1 AND venue_id = $2`,
@@ -127,9 +170,7 @@ export class OrdersService {
         }
       }
 
-      // Split items into (type, destination) groups
       const groups = new Map<GroupKey, Array<{ productId: string; quantity: number }>>();
-
       for (const reqItem of input.items) {
         const product = productsMap.get(reqItem.productId)!;
         const destination: Destination = product.type === 'bottle' ? 'warehouse' : 'bar';
@@ -156,14 +197,13 @@ export class OrdersService {
 
       if (groups.size === 0) throw new OrderError('No items to order', 422);
 
-      // Create one order per group
       const createdOrders: Array<{ id: string; type: string; destination: string; itemCount: number }> = [];
       for (const [key, items] of groups) {
         const [type, destination] = key.split('-') as [OrderType, Destination];
         const orderResult = await client.query<{ id: string }>(
           `INSERT INTO orders (venue_id, event_id, guest_event_id, waiter_id, type, destination, table_ref, notes)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-          [venueId, ge.event_id, ge.id, waiterId, type, destination, input.tableRef ?? null, input.notes ?? null],
+          [venueId, ge.event_id, ge.id, waiterId, type, destination, input.tableRef, input.notes ?? null],
         );
         const orderId = orderResult.rows[0]!.id;
         for (const item of items) {
@@ -206,7 +246,6 @@ export class OrdersService {
       params.push(opts.statuses as unknown as string);
       filters.push(`AND o.status = ANY($${params.length})`);
     }
-    const guestFilter = filters.join(' ');
 
     const result = await this.db.query(
       `SELECT o.*,
@@ -224,11 +263,11 @@ export class OrdersService {
               ) AS items
        FROM orders o
        JOIN users u ON u.id = o.waiter_id
-       JOIN guest_events ge ON ge.id = o.guest_event_id
-       JOIN guests g ON g.id = ge.guest_id
+       LEFT JOIN guest_events ge ON ge.id = o.guest_event_id
+       LEFT JOIN guests g ON g.id = ge.guest_id
        JOIN order_items oi ON oi.order_id = o.id
        JOIN products p ON p.id = oi.product_id
-       WHERE o.venue_id = $1 AND o.event_id = $2 ${guestFilter}
+       WHERE o.venue_id = $1 AND o.event_id = $2 ${filters.join(' ')}
        GROUP BY o.id, u.first_name, u.last_name, g.first_name, g.last_name
        ORDER BY o.created_at DESC`,
       params,
@@ -249,7 +288,7 @@ export class OrdersService {
       const { status: cur, event_id: eventId } = current.rows[0]!;
       if (newStatus !== cur + 1) throw new OrderError('Status must advance by exactly one step', 422);
 
-      // State 3 = dispatch: decrement inventory
+      // State 3 = dispatch: decrement inventory (ERP-only, never affects guest entry)
       if (newStatus === 3) {
         const items = await client.query<{ product_id: string; quantity: number }>(
           `SELECT product_id, quantity FROM order_items WHERE order_id = $1 AND venue_id = $2`,
@@ -263,7 +302,6 @@ export class OrdersService {
              RETURNING quantity`,
             [item.quantity, eventId, item.product_id, venueId],
           );
-          // No rows = either not configured (allowed) or insufficient stock
           if (inv.rows.length === 0) {
             const exists = await client.query(
               `SELECT 1 FROM event_inventory WHERE event_id = $1 AND product_id = $2 AND venue_id = $3`,
@@ -272,7 +310,6 @@ export class OrdersService {
             if (exists.rows.length > 0) {
               throw new OrderError('Insufficient inventory to dispatch', 422);
             }
-            // Not configured — skip decrement (inventory tracking optional)
           }
         }
       }
@@ -300,13 +337,13 @@ export class OrdersService {
   }
 
   async notifyPassBalance(venueId: string, orderId: string) {
-    // Get order → guest_event → guest phone + pass balance
-    const orderRow = await this.db.query<{ guest_event_id: string; event_id: string }>(
-      `SELECT guest_event_id, event_id FROM orders WHERE id = $1 AND venue_id = $2`,
+    const orderRow = await this.db.query<{ guest_event_id: string | null }>(
+      `SELECT guest_event_id FROM orders WHERE id = $1 AND venue_id = $2`,
       [orderId, venueId],
     );
     if (orderRow.rows.length === 0) return;
-    const { guest_event_id: geId, event_id: eventId } = orderRow.rows[0]!;
+    const geId = orderRow.rows[0]!.guest_event_id;
+    if (!geId) return; // plain table order — no pass to notify
 
     const geRow = await this.db.query<{ phone: string; pass_tier_id: string | null; first_name: string }>(
       `SELECT g.phone, ge.pass_tier_id, g.first_name
@@ -325,7 +362,6 @@ export class OrdersService {
       ? `${first_name}, tu pass ha sido consumido completamente. ¡Que lo hayas disfrutado!`
       : `${first_name}, items entregados. Saldo restante: ${remaining.map((b) => `${b.remaining} ${b.productName}`).join(' · ')}`;
 
-    // WhatsApp Cloud API stub — fires if credentials are configured in env
     const token = process.env['WHATSAPP_TOKEN'];
     const phoneId = process.env['WHATSAPP_PHONE_ID'];
     if (token && phoneId) {

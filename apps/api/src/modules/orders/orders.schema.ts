@@ -6,10 +6,10 @@ export interface OrderItem {
 }
 
 export interface CreateOrderBody {
-  guestEventId: string;
   eventId: string;
+  tableRef: string;           // required — primary customer identifier
+  guestEventId?: string;      // optional — only when guest pass QR was scanned
   items: OrderItem[];
-  tableRef?: string;
   notes?: string;
 }
 
@@ -24,10 +24,11 @@ export interface AdvanceOrderBody {
 export const createOrderSchema: FastifySchema = {
   body: {
     type: 'object',
-    required: ['guestEventId', 'eventId', 'items'],
+    required: ['eventId', 'tableRef', 'items'],
     properties: {
+      eventId:      { type: 'string', format: 'uuid' },
+      tableRef:     { type: 'string', minLength: 1 },
       guestEventId: { type: 'string', format: 'uuid' },
-      eventId: { type: 'string', format: 'uuid' },
       items: {
         type: 'array',
         minItems: 1,
@@ -36,11 +37,10 @@ export const createOrderSchema: FastifySchema = {
           required: ['productId', 'quantity'],
           properties: {
             productId: { type: 'string', format: 'uuid' },
-            quantity: { type: 'integer', minimum: 1 },
+            quantity:  { type: 'integer', minimum: 1 },
           },
         },
       },
-      tableRef: { type: 'string' },
       notes: { type: 'string' },
     },
   },
