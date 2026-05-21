@@ -1,0 +1,18 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+
+project_name    = "phase1plus"
+environment     = "staging"
+aws_region      = "us-east-1"
+instance_type   = "t3.medium"
+
+# Path to your SSH public key (the matching private key lets you SSH in)
+public_key_path = "~/.ssh/id_rsa.pub"
+
+# Restrict SSH to your own IP — find it at https://ifconfig.me
+# Example: ["203.0.113.42/32"]
+allowed_ssh_cidrs = ["0.0.0.0/0"]
+
+# CORS origins allowed to upload to S3 directly from the browser
+# In production, list your actual domain(s)
+s3_cors_origins = ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"]
