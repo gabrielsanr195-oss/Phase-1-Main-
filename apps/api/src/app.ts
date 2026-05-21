@@ -6,6 +6,7 @@ import databasePlugin from './plugins/database';
 import redisPlugin from './plugins/redis';
 import authPlugin from './plugins/auth';
 import tenantPlugin from './plugins/tenant';
+import socketioPlugin from './plugins/socketio';
 import authRoutes from './modules/auth/auth.routes';
 import eventsRoutes from './modules/events/events.routes';
 import keyholdersRoutes from './modules/keyholders/keyholders.routes';
@@ -41,6 +42,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(databasePlugin);
   await app.register(redisPlugin);
   await app.register(authPlugin);
+  await app.register(socketioPlugin);
 
   app.get('/health', async () => ({
     status: 'ok',

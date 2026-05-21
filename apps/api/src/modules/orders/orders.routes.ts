@@ -93,7 +93,19 @@ export default async function ordersRoutes(app: FastifyInstance) {
         return reply.status(403).send({ error: 'Forbidden' });
       }
       try {
-        return await svc.advanceStatus(req.venueId, req.params.id, req.body.status);
+        const updated = await svc.advanceStatus(req.venueId, req.params.id, req.body.status);
+        // Broadcast to all station boards watching this event
+        app.io.to(`event:${updated.event_id as string}`).emit('order_updated', {
+          id: updated.id as string,
+          status: updated.status as number,
+          event_id: updated.event_id as string,
+          destination: updated.destination as string,
+        });
+        // On delivery (status=5), notify pass balance if WhatsApp configured
+        if ((updated.status as number) === 5) {
+          void svc.notifyPassBalance(req.venueId, updated.id as string).catch(() => void 0);
+        }
+        return updated;
       } catch (err) {
         if (err instanceof OrderError) return reply.status(err.statusCode).send({ error: err.message });
         throw err;

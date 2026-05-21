@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { io } from 'socket.io-client';
 import { get, patch, ApiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+
+const SOCKET_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000';
 
 interface OrderItem {
   productId: string; productName: string; productType: string;
@@ -47,9 +50,23 @@ export default function StationPage({ destination, title, eventId }: Props) {
 
   useEffect(() => {
     void load();
-    const interval = setInterval(() => void load(), 8000);
-    return () => clearInterval(interval);
-  }, [load]);
+
+    // Real-time updates via Socket.IO; fall back to polling on disconnect
+    const socket = io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+    socket.emit('join_event', eventId);
+    socket.on('order_updated', () => void load());
+
+    // Fallback poll while socket is disconnected
+    const interval = setInterval(() => {
+      if (!socket.connected) void load();
+    }, 10000);
+
+    return () => {
+      socket.emit('leave_event', eventId);
+      socket.disconnect();
+      clearInterval(interval);
+    };
+  }, [load, eventId]);
 
   async function advance(orderId: string, nextStatus: number) {
     setAdvancing(orderId);

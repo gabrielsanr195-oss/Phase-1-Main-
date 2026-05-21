@@ -3,9 +3,9 @@
 > Source of truth for session state. Update at the end of every session.
 
 ## Estado actual
-**Sprint**: 4 (audit fixes applied) — correct auto-confirmation, ratio enforcement, capacity dashboard
-**Last session**: Compliance audit fixes — registerViaShareLink now auto-confirms per link type, ratio_gated enforces gender ratio, web-admin EventDetailPage has capacity/ratio stats panel
-**Next**: Sprint 5 — Waiter/order flow (web-staff) + inventory management
+**Sprint**: 7 complete — full order flow (waiter → warehouse/bar → delivery) + Socket.IO + WhatsApp stub
+**Last session**: Sprints 5-7: products/pass bundles, order auto-split, waiter/warehouse/bar apps, inventory decrement, Socket.IO real-time board, WhatsApp pass-balance notification
+**Next**: Sprint 8 — Payments + FEL fiscal integration
 
 ## Completed ✅
 - [x] S0-1: Monorepo (pnpm workspaces + TypeScript)
@@ -35,6 +35,19 @@
 - [x] S4-7: web-admin — EventDetailPage: event phase badge + one-click advance button
 - [x] S4-8: API — registerViaShareLink auto-confirms (open/threshold_gated) + ratio_gated gender check
 - [x] S4-9: web-admin — EventDetailPage capacity/ratio dashboard (spots, gender split, ratio vs target, en-lista queue)
+- [x] S5-1: web-staff — WaiterPage: scan guest QR → validate + get pass balance
+- [x] S5-2: web-staff — WaiterPage: order form with +/- quantity per product
+- [x] S5-3: API — POST /orders auto-splits into pass vs extra comandas
+- [x] S5-4: API — destination routing (bottle→warehouse, drink→bar); shots blocked at waiter
+- [x] S6-1: web-staff — WarehousePage: Kanban board for warehouse orders (states 1→2→3)
+- [x] S6-2: web-staff — BarPage: Kanban board for bar orders (states 1→2→3)
+- [x] S6-3: API — inventory decrement on dispatch (state 3), transactional, blocks if insufficient
+- [x] S6-4: web-admin — Inventario tab on EventDetailPage (set/view stock levels)
+- [x] S6-5: DB migration 003 — event_inventory with sub-locations + alert thresholds
+- [x] S7-1: web-staff — WaiterPage: shows dispatched orders (state 3→4 Recibido, 4→5 Entregado)
+- [x] S7-2: API — notifyPassBalance: WhatsApp message with remaining pass items on delivery (stub, fires when WHATSAPP_TOKEN + WHATSAPP_PHONE_ID set)
+- [x] S7-3: shots blocked in waiter flow (enforced API-side in POST /orders)
+- [x] S7-4: Socket.IO real-time order board — station pages subscribe to event room, order_updated events broadcast on every state advance
 
 ## In progress 🔄
 _nothing — audit fixes done, sprint 5 next_

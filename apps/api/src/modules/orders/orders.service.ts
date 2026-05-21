@@ -298,6 +298,51 @@ export class OrdersService {
       client.release();
     }
   }
+
+  async notifyPassBalance(venueId: string, orderId: string) {
+    // Get order → guest_event → guest phone + pass balance
+    const orderRow = await this.db.query<{ guest_event_id: string; event_id: string }>(
+      `SELECT guest_event_id, event_id FROM orders WHERE id = $1 AND venue_id = $2`,
+      [orderId, venueId],
+    );
+    if (orderRow.rows.length === 0) return;
+    const { guest_event_id: geId, event_id: eventId } = orderRow.rows[0]!;
+
+    const geRow = await this.db.query<{ phone: string; pass_tier_id: string | null; first_name: string }>(
+      `SELECT g.phone, ge.pass_tier_id, g.first_name
+       FROM guest_events ge JOIN guests g ON g.id = ge.guest_id
+       WHERE ge.id = $1 AND ge.venue_id = $2`,
+      [geId, venueId],
+    );
+    if (geRow.rows.length === 0) return;
+    const { phone, pass_tier_id, first_name } = geRow.rows[0]!;
+
+    const balance = await this.getPassBalance(venueId, geId, pass_tier_id);
+    if (balance.length === 0) return;
+
+    const remaining = balance.filter((b) => b.remaining > 0);
+    const message = remaining.length === 0
+      ? `${first_name}, tu pass ha sido consumido completamente. ¡Que lo hayas disfrutado!`
+      : `${first_name}, items entregados. Saldo restante: ${remaining.map((b) => `${b.remaining} ${b.productName}`).join(' · ')}`;
+
+    // WhatsApp Cloud API stub — fires if credentials are configured in env
+    const token = process.env['WHATSAPP_TOKEN'];
+    const phoneId = process.env['WHATSAPP_PHONE_ID'];
+    if (token && phoneId) {
+      await fetch(`https://graph.facebook.com/v18.0/${phoneId}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: phone,
+          type: 'text',
+          text: { body: message },
+        }),
+      });
+    } else {
+      console.log(`[WhatsApp stub] → ${phone}: ${message}`);
+    }
+  }
 }
 
 export class OrderError extends Error {
