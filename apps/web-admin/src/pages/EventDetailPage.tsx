@@ -120,6 +120,19 @@ export default function EventDetailPage() {
 
   if (!event) return <p style={{ color: '#666' }}>Cargando...</p>;
 
+  // Capacity / ratio stats
+  const confirmedGuests = guests.filter((g) => !['rejected', 'en_lista'].includes(g.status));
+  const confirmedTotal = confirmedGuests.length;
+  const confirmedWomen = confirmedGuests.filter((g) => g.gender === 'female').length;
+  const confirmedMen = confirmedGuests.filter((g) => g.gender === 'male').length;
+  const enListaTotal = guests.filter((g) => g.status === 'en_lista').length;
+  const enListaWomen = guests.filter((g) => g.status === 'en_lista' && g.gender === 'female').length;
+  const enListaMen = guests.filter((g) => g.status === 'en_lista' && g.gender === 'male').length;
+  const ratioTarget = parseFloat(event.ratio_target_women) || 0;
+  const currentRatio = confirmedTotal > 0 ? confirmedWomen / confirmedTotal : 0;
+  const availableSpots = Math.max(0, event.total_pax - event.reserved_spots - confirmedTotal);
+  const ratioOk = currentRatio >= ratioTarget;
+
   return (
     <div>
       <Link to="/" style={s.backLink}>← Eventos</Link>
@@ -152,6 +165,42 @@ export default function EventDetailPage() {
             )}
           </div>
           {phaseError && <p style={s.phaseError}>{phaseError}</p>}
+        </div>
+      </div>
+
+      {/* Capacity & Ratio Dashboard */}
+      <div style={s.ratioDash}>
+        <div style={s.ratioBlock}>
+          <div style={s.ratioTitle}>Cupo disponible</div>
+          <div style={{ ...s.ratioVal, color: availableSpots < 10 ? '#e55' : '#4caf50' }}>{availableSpots}</div>
+          <div style={s.ratioSub}>de {event.total_pax} ({event.reserved_spots} reservados)</div>
+        </div>
+        <div style={s.ratioBlock}>
+          <div style={s.ratioTitle}>Confirmados</div>
+          <div style={s.ratioVal}>{confirmedTotal}</div>
+          <div style={s.ratioSub}>
+            <span style={{ color: '#e97fa8' }}>♀ {confirmedWomen}</span>
+            {confirmedTotal > 0 ? ` (${Math.round(confirmedWomen / confirmedTotal * 100)}%)` : ''}
+            {'  '}
+            <span style={{ color: '#7ab3ff' }}>♂ {confirmedMen}</span>
+            {confirmedTotal > 0 ? ` (${Math.round(confirmedMen / confirmedTotal * 100)}%)` : ''}
+          </div>
+        </div>
+        <div style={s.ratioBlock}>
+          <div style={s.ratioTitle}>Ratio mujeres</div>
+          <div style={{ ...s.ratioVal, color: ratioOk ? '#4caf50' : '#e55' }}>
+            {Math.round(currentRatio * 100)}%
+          </div>
+          <div style={s.ratioSub}>objetivo: {Math.round(ratioTarget * 100)}% {ratioOk ? '✓' : '⚠'}</div>
+        </div>
+        <div style={s.ratioBlock}>
+          <div style={s.ratioTitle}>En lista</div>
+          <div style={s.ratioVal}>{enListaTotal}</div>
+          <div style={s.ratioSub}>
+            <span style={{ color: '#e97fa8' }}>♀ {enListaWomen}</span>
+            {'  '}
+            <span style={{ color: '#7ab3ff' }}>♂ {enListaMen}</span>
+          </div>
         </div>
       </div>
 
@@ -276,6 +325,11 @@ const s: Record<string, React.CSSProperties> = {
   stat: { display: 'flex', flexDirection: 'column', alignItems: 'center' },
   statVal: { fontSize: '1.6rem', fontWeight: 700, lineHeight: 1 },
   statLbl: { fontSize: '0.75rem', color: '#888', marginTop: '0.2rem' },
+  ratioDash: { display: 'flex', gap: '1rem', flexWrap: 'wrap', backgroundColor: '#111', borderRadius: '10px', padding: '1rem 1.25rem', marginBottom: '1.5rem' },
+  ratioBlock: { flex: '1 1 120px', display: 'flex', flexDirection: 'column', gap: '0.2rem' },
+  ratioTitle: { fontSize: '0.72rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 },
+  ratioVal: { fontSize: '1.5rem', fontWeight: 700, lineHeight: 1 },
+  ratioSub: { fontSize: '0.78rem', color: '#999' },
   tabs: { display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid #222', paddingBottom: '0.75rem' },
   tabBtn: { background: 'none', border: 'none', color: '#888', fontSize: '0.9rem', cursor: 'pointer', padding: '0.4rem 0.75rem', borderRadius: '6px' },
   tabActive: { backgroundColor: '#2a2a2a', color: '#f0f0f0' },

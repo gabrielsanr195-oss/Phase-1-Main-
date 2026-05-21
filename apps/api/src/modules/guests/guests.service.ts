@@ -7,7 +7,7 @@ export class GuestsService {
   async registerViaShareLink(token: string, input: GuestRegistrationBody) {
     const linkResult = await this.db.query(
       `SELECT sl.*, e.venue_id, e.total_pax, e.reserved_spots, e.invitation_expires_hours,
-              ke.threshold, ke.invites_used
+              e.ratio_target_women, ke.threshold, ke.invites_used
        FROM share_links sl
        JOIN events e ON e.id = sl.event_id
        LEFT JOIN keyholder_events ke
@@ -80,15 +80,40 @@ export class GuestsService {
         }
       }
 
+      // Determine status: open/threshold_gated → confirmed; ratio_gated → check ratio
+      let guestStatus = 'confirmed';
+      if (link.link_type === 'ratio_gated') {
+        const ratioResult = await client.query<{ gender: string; count: string }>(
+          `SELECT g.gender, COUNT(*) AS count
+           FROM guest_events ge
+           JOIN guests g ON g.id = ge.guest_id
+           WHERE ge.event_id = $1 AND ge.status NOT IN ('rejected', 'en_lista')
+           GROUP BY g.gender`,
+          [eventId],
+        );
+        let totalConfirmed = 0;
+        let womenCount = 0;
+        for (const row of ratioResult.rows) {
+          const n = parseInt(row.count, 10);
+          totalConfirmed += n;
+          if (row.gender === 'female') womenCount = n;
+        }
+        const newTotal = totalConfirmed + 1;
+        const newWomen = input.gender === 'female' ? womenCount + 1 : womenCount;
+        const newRatio = newWomen / newTotal;
+        const target = parseFloat(link.ratio_target_women as string) || 0;
+        guestStatus = newRatio >= target ? 'confirmed' : 'en_lista';
+      }
+
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + (Number(link.invitation_expires_hours) || 96));
 
       const geResult = await client.query(
         `INSERT INTO guest_events
            (venue_id, guest_id, event_id, keyholder_id, share_link_id, pass_tier_id, status, invitation_expires_at)
-         VALUES ($1,$2,$3,$4,$5,$6,'en_lista',$7)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
          RETURNING *`,
-        [venueId, guestId, eventId, keyholderId, link.id, passTierId, expiresAt],
+        [venueId, guestId, eventId, keyholderId, link.id, passTierId, guestStatus, expiresAt],
       );
 
       await client.query(
