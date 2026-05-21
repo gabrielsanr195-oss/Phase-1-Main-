@@ -138,14 +138,40 @@ export class GuestsService {
       checked_out: 'checked_out_at',
     };
     const tsField = tsMap[input.status];
+
+    // Issue RS256 QR token when status transitions to 'paid'
+    let qrToken: string | null = null;
+    if (input.status === 'paid') {
+      try {
+        const { getQRPrivateKey } = await import('../../utils/qr-keys');
+        const { signQR } = await import('@phase1plus/qr-lib');
+        const geResult = await this.db.query<{ event_id: string }>(
+          `SELECT event_id FROM guest_events WHERE id = $1 AND venue_id = $2`,
+          [guestEventId, venueId],
+        );
+        if (geResult.rows.length > 0) {
+          const privateKeyPem = await getQRPrivateKey();
+          qrToken = await signQR(
+            { sub: guestEventId, venue_id: venueId, event_id: geResult.rows[0]!.event_id, type: 'guest' },
+            privateKeyPem,
+          );
+        }
+      } catch {
+        // Keys not configured — status update proceeds, qr_token stays null
+      }
+    }
+
     const tsClause = tsField ? `, ${tsField} = NOW()` : '';
+    const qrClause = qrToken ? ', qr_token = $5' : '';
+    const params: (string | null)[] = [input.status, input.adminNote ?? null, guestEventId, venueId];
+    if (qrToken) params.push(qrToken);
 
     const result = await this.db.query(
       `UPDATE guest_events
-       SET status = $1, admin_note = COALESCE($2, admin_note) ${tsClause}
+       SET status = $1, admin_note = COALESCE($2, admin_note) ${tsClause} ${qrClause}
        WHERE id = $3 AND venue_id = $4
        RETURNING *`,
-      [input.status, input.adminNote ?? null, guestEventId, venueId],
+      params,
     );
     return result.rows[0] ?? null;
   }

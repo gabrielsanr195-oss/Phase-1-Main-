@@ -3,9 +3,9 @@
 > Source of truth for session state. Update at the end of every session.
 
 ## Estado actual
-**Sprint**: 2 — Keyholder & Guest Registration
-**Last session**: Sprint 2 complete — events, keyholders, share links, guest registration (API + web-client)
-**Next**: Sprint 3 — Admin dashboard (web-admin) + door scan flow
+**Sprint**: 3 — Admin Dashboard + Door Scan
+**Last session**: Sprint 3 complete — web-admin dashboard, door scan API, QR issuance, web-staff door app
+**Next**: Sprint 4 — Keyholder web app (web-client keyholder view) + share link generation UI
 
 ## Completed ✅
 - [x] S0-1: Monorepo (pnpm workspaces + TypeScript)
@@ -21,9 +21,14 @@
 - [x] S2-4: Guest registration — POST /register/:token (public, idempotent by phone)
 - [x] S2-5: Guest management — list by event (admin/keyholder), update status (admin)
 - [x] S2-6: web-client — RegisterPage (/r/:token) + ConfirmationPage (/r/:token/done)
+- [x] S3-1: API door module — POST /door/scan (RS256 QR validate → check-in)
+- [x] S3-2: QR issuance — auto-sign RS256 JWT when guest status → 'paid'
+- [x] S3-3: utils/qr-keys.ts — cached key file loader
+- [x] S3-4: web-admin — Login, Events list/create, EventDetail (pass tiers + guest management), Keyholders
+- [x] S3-5: web-staff — Door app (login + QR scan/check-in with instant visual feedback)
 
 ## In progress 🔄
-_nothing — sprint 2 done_
+_nothing — sprint 3 done_
 
 ## Key files
 | File | Purpose |
@@ -43,6 +48,11 @@ _nothing — sprint 2 done_
 | `apps/web-client/src/pages/RegisterPage.tsx` | Guest self-registration form |
 | `apps/web-client/src/pages/ConfirmationPage.tsx` | Post-registration confirmation |
 | `apps/web-client/src/api/client.ts` | Fetch wrapper (get/post) |
+| `apps/web-admin/src/` | Admin dashboard: Login, Events, EventDetail, Keyholders |
+| `apps/web-admin/src/context/AuthContext.tsx` | Auth state + localStorage persistence |
+| `apps/web-staff/src/pages/DoorPage.tsx` | QR scan input → check-in result (green/red) |
+| `apps/api/src/modules/door/` | Door scan — validate RS256 QR, mark checked_in |
+| `apps/api/src/utils/qr-keys.ts` | Cached PEM key file loader |
 | `packages/qr-lib/` | RS256 QR sign/validate (jose) |
 | `packages/types/` | Shared TypeScript types |
 | `docker-compose.yml` | Local dev: PostgreSQL + Redis |

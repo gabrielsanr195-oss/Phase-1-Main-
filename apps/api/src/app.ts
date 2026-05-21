@@ -13,6 +13,7 @@ import shareLinksRoutes from './modules/share-links/share-links.routes';
 import shareLinksPublicRoutes from './modules/share-links/share-links-public.routes';
 import guestsRoutes from './modules/guests/guests.routes';
 import guestRegistrationRoutes from './modules/guests/guests-public.routes';
+import doorRoutes from './modules/door/door.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -57,6 +58,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await inner.register(keyholdersRoutes, { prefix: '/keyholders' });
     await inner.register(shareLinksRoutes, { prefix: '/share-links' });
     await inner.register(guestsRoutes, { prefix: '/guests' });
+    await inner.register(doorRoutes, { prefix: '/door' });
   });
 
   return app;
