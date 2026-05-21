@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 
 export default function ConfirmationPage() {
   const { token } = useParams<{ token: string }>();
@@ -11,9 +11,11 @@ export default function ConfirmationPage() {
         <p style={styles.body}>
           Tu solicitud fue recibida. Serás notificado cuando tu acceso sea confirmado.
         </p>
-        <p style={styles.hint}>
-          Guarda este enlace para revisar tu estado.
-        </p>
+        {token && (
+          <Link to={`/r/${token}/status`} style={styles.statusLink}>
+            Ver estado de mi registro →
+          </Link>
+        )}
         {token && (
           <p style={styles.tokenDisplay}>
             Código: <code style={styles.code}>{token}</code>
@@ -57,6 +59,7 @@ const styles: Record<string, React.CSSProperties> = {
   title: { fontSize: '1.6rem', fontWeight: 700, margin: '0 0 0.75rem' },
   body: { color: '#ccc', lineHeight: 1.6, margin: '0 0 1rem' },
   hint: { color: '#888', fontSize: '0.85rem', margin: '0 0 1.25rem' },
+  statusLink: { display: 'inline-block', marginBottom: '1rem', color: '#d4af37', fontSize: '0.9rem', fontWeight: 600, textDecoration: 'none' },
   tokenDisplay: { fontSize: '0.85rem', color: '#888' },
   code: {
     backgroundColor: '#2a2a2a',

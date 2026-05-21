@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import RegisterPage from './pages/RegisterPage';
 import ConfirmationPage from './pages/ConfirmationPage';
+import StatusPage from './pages/StatusPage';
 
 export default function App() {
   return (
@@ -8,6 +9,7 @@ export default function App() {
       <Routes>
         <Route path="/r/:token" element={<RegisterPage />} />
         <Route path="/r/:token/done" element={<ConfirmationPage />} />
+        <Route path="/r/:token/status" element={<StatusPage />} />
         <Route
           path="*"
           element={

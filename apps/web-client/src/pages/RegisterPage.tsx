@@ -72,6 +72,7 @@ export default function RegisterPage() {
         ...(form.dateOfBirth ? { dateOfBirth: form.dateOfBirth } : {}),
         whatsappOptIn: form.whatsappOptIn,
       });
+      if (token) localStorage.setItem(`phase1plus_phone_${token}`, form.phone);
       navigate(`/r/${token}/done`);
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : 'Registration failed. Please try again.');

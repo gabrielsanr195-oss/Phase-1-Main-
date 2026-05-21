@@ -1,8 +1,15 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import DoorPage from './pages/DoorPage';
+import KeyholderDashboard from './pages/KeyholderDashboard';
+
+function HomeRoute() {
+  const { user } = useAuth();
+  if (user?.role === 'keyholder') return <KeyholderDashboard />;
+  return <DoorPage />;
+}
 
 export default function App() {
   return (
@@ -14,7 +21,7 @@ export default function App() {
             path="/"
             element={
               <ProtectedRoute>
-                <DoorPage />
+                <HomeRoute />
               </ProtectedRoute>
             }
           />

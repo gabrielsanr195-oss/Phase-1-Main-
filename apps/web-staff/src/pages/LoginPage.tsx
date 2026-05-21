@@ -26,8 +26,8 @@ export default function LoginPage() {
     setError(null);
     try {
       const res = await post<LoginResponse>('/auth/login', form);
-      if (!['door', 'admin'].includes(res.user.role)) {
-        setError('Esta app es solo para personal de puerta.');
+      if (!['door', 'admin', 'keyholder'].includes(res.user.role)) {
+        setError('Acceso no autorizado para este rol.');
         return;
       }
       login(res.accessToken, res.user);
@@ -42,7 +42,7 @@ export default function LoginPage() {
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <h1 style={s.title}>Acceso — Puerta</h1>
+        <h1 style={s.title}>Acceso — Staff</h1>
         <form onSubmit={handleSubmit} style={s.form}>
           <label style={s.label}>Email</label>
           <input style={s.input} name="email" type="email" value={form.email} onChange={handleChange} required autoFocus />

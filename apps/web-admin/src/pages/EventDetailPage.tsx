@@ -20,6 +20,16 @@ interface GuestEvent {
 
 type Tab = 'guests' | 'pass-tiers';
 
+const PHASE_ORDER = ['phase_0', 'phase_1', 'phase_2', 'phase_3', 'phase_4', 'closed'];
+const PHASE_LABEL: Record<string, string> = {
+  phase_0: 'Fase 0', phase_1: 'Fase 1', phase_2: 'Fase 2',
+  phase_3: 'Fase 3', phase_4: 'Fase 4', closed: 'Cerrado',
+};
+const PHASE_COLOR: Record<string, string> = {
+  phase_0: '#888', phase_1: '#4a9eff', phase_2: '#9c6eff',
+  phase_3: '#ff9f4a', phase_4: '#ff4a6e', closed: '#555',
+};
+
 const STATUS_LABEL: Record<string, string> = {
   en_lista: 'En lista', confirmed: 'Confirmado', rejected: 'Rechazado',
   paid: 'Pagado', checked_in: 'Checkin', checked_out: 'Salió',
@@ -42,6 +52,8 @@ export default function EventDetailPage() {
   const [savingTier, setSavingTier] = useState(false);
   const [tierError, setTierError] = useState<string | null>(null);
   const [statusLoading, setStatusLoading] = useState<string | null>(null);
+  const [phaseLoading, setPhaseLoading] = useState(false);
+  const [phaseError, setPhaseError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!id) return;
@@ -56,6 +68,23 @@ export default function EventDetailPage() {
   }, [id]);
 
   useEffect(() => { void fetchAll(); }, [fetchAll]);
+
+  async function advancePhase() {
+    if (!event || !id) return;
+    const nextIdx = PHASE_ORDER.indexOf(event.status) + 1;
+    const next = PHASE_ORDER[nextIdx];
+    if (!next) return;
+    setPhaseLoading(true);
+    setPhaseError(null);
+    try {
+      await patch(`/events/${id}/status`, { status: next });
+      await fetchAll();
+    } catch (err) {
+      setPhaseError(err instanceof ApiError ? err.message : 'Error al avanzar fase');
+    } finally {
+      setPhaseLoading(false);
+    }
+  }
 
   async function updateStatus(guestEventId: string, status: string) {
     setStatusLoading(guestEventId);
@@ -103,13 +132,26 @@ export default function EventDetailPage() {
           </p>
           {event.description && <p style={s.desc}>{event.description}</p>}
         </div>
-        <div style={s.statBox}>
-          <div style={s.stat}><span style={s.statVal}>{guests.length}</span><span style={s.statLbl}>Invitados</span></div>
-          <div style={s.stat}><span style={s.statVal}>{event.total_pax}</span><span style={s.statLbl}>Capacidad</span></div>
-          <div style={s.stat}>
-            <span style={s.statVal}>{guests.filter((g) => g.status === 'paid' || g.status === 'checked_in').length}</span>
-            <span style={s.statLbl}>Pagados</span>
+        <div style={s.rightCol}>
+          <div style={s.statBox}>
+            <div style={s.stat}><span style={s.statVal}>{guests.length}</span><span style={s.statLbl}>Invitados</span></div>
+            <div style={s.stat}><span style={s.statVal}>{event.total_pax}</span><span style={s.statLbl}>Capacidad</span></div>
+            <div style={s.stat}>
+              <span style={s.statVal}>{guests.filter((g) => g.status === 'paid' || g.status === 'checked_in').length}</span>
+              <span style={s.statLbl}>Pagados</span>
+            </div>
           </div>
+          <div style={s.phaseRow}>
+            <span style={{ ...s.phaseBadge, backgroundColor: PHASE_COLOR[event.status] ?? '#555' }}>
+              {PHASE_LABEL[event.status] ?? event.status}
+            </span>
+            {event.status !== 'closed' && (
+              <button style={s.advanceBtn} onClick={() => void advancePhase()} disabled={phaseLoading}>
+                {phaseLoading ? '...' : `→ ${PHASE_LABEL[PHASE_ORDER[PHASE_ORDER.indexOf(event.status) + 1] ?? ''] ?? ''}`}
+              </button>
+            )}
+          </div>
+          {phaseError && <p style={s.phaseError}>{phaseError}</p>}
         </div>
       </div>
 
@@ -225,7 +267,12 @@ const s: Record<string, React.CSSProperties> = {
   h1: { margin: '0 0 0.25rem', fontSize: '1.5rem', fontWeight: 700 },
   subtitle: { color: '#888', margin: '0 0 0.5rem', fontSize: '0.9rem' },
   desc: { color: '#bbb', margin: 0, fontSize: '0.9rem' },
+  rightCol: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.75rem' },
   statBox: { display: 'flex', gap: '1.5rem' },
+  phaseRow: { display: 'flex', alignItems: 'center', gap: '0.5rem' },
+  phaseBadge: { fontSize: '0.75rem', fontWeight: 700, borderRadius: '5px', padding: '0.25rem 0.6rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em' },
+  advanceBtn: { backgroundColor: '#2a2a2a', border: '1px solid #444', color: '#f0f0f0', borderRadius: '5px', padding: '0.3rem 0.65rem', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 },
+  phaseError: { color: '#e55', fontSize: '0.8rem', margin: 0 },
   stat: { display: 'flex', flexDirection: 'column', alignItems: 'center' },
   statVal: { fontSize: '1.6rem', fontWeight: 700, lineHeight: 1 },
   statLbl: { fontSize: '0.75rem', color: '#888', marginTop: '0.2rem' },

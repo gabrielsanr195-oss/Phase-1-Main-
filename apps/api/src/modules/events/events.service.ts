@@ -67,4 +67,24 @@ export class EventsService {
     );
     return result.rows;
   }
+
+  async listEventsForKeyholder(venueId: string, keyholderId: string) {
+    const result = await this.db.query(
+      `SELECT e.*, ke.threshold, ke.invites_used
+       FROM events e
+       JOIN keyholder_events ke ON ke.event_id = e.id
+       WHERE e.venue_id = $1 AND ke.keyholder_id = $2 AND ke.is_active = true
+       ORDER BY e.event_date DESC`,
+      [venueId, keyholderId],
+    );
+    return result.rows;
+  }
+
+  async advanceStatus(venueId: string, eventId: string, status: string) {
+    const result = await this.db.query(
+      `UPDATE events SET status = $1 WHERE id = $2 AND venue_id = $3 RETURNING *`,
+      [status, eventId, venueId],
+    );
+    return result.rows[0] ?? null;
+  }
 }

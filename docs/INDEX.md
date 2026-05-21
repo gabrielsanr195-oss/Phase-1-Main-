@@ -3,9 +3,9 @@
 > Source of truth for session state. Update at the end of every session.
 
 ## Estado actual
-**Sprint**: 3 — Admin Dashboard + Door Scan
-**Last session**: Sprint 3 complete — web-admin dashboard, door scan API, QR issuance, web-staff door app
-**Next**: Sprint 4 — Keyholder web app (web-client keyholder view) + share link generation UI
+**Sprint**: 4 — Keyholder self-service + Guest QR display + Event phase progression
+**Last session**: Sprint 4 complete — keyholder dashboard (web-staff), guest status/QR page (web-client), event phase API + admin UI
+**Next**: Sprint 5 — Waiter/order flow (web-staff) + inventory management
 
 ## Completed ✅
 - [x] S0-1: Monorepo (pnpm workspaces + TypeScript)
@@ -26,9 +26,16 @@
 - [x] S3-3: utils/qr-keys.ts — cached key file loader
 - [x] S3-4: web-admin — Login, Events list/create, EventDetail (pass tiers + guest management), Keyholders
 - [x] S3-5: web-staff — Door app (login + QR scan/check-in with instant visual feedback)
+- [x] S4-1: API — GET /events filters to assigned events for keyholder role
+- [x] S4-2: API — PATCH /events/:id/status — forward-only phase progression (admin), closes require inventory_audit_done
+- [x] S4-3: API — GET /register/:token/status?phone — public guest status check
+- [x] S4-4: web-client — StatusPage (/r/:token/status): guest enters phone → sees status + QR code (qrcode.react) if paid
+- [x] S4-5: web-staff — KeyholderDashboard: assigned events, share link creation (select tier + type), own guest list
+- [x] S4-6: web-staff — role-based routing: keyholder → dashboard, door → scan page
+- [x] S4-7: web-admin — EventDetailPage: event phase badge + one-click advance button
 
 ## In progress 🔄
-_nothing — sprint 3 done_
+_nothing — sprint 4 done_
 
 ## Key files
 | File | Purpose |
