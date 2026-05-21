@@ -5,7 +5,14 @@ import { config } from './config';
 import databasePlugin from './plugins/database';
 import redisPlugin from './plugins/redis';
 import authPlugin from './plugins/auth';
+import tenantPlugin from './plugins/tenant';
 import authRoutes from './modules/auth/auth.routes';
+import eventsRoutes from './modules/events/events.routes';
+import keyholdersRoutes from './modules/keyholders/keyholders.routes';
+import shareLinksRoutes from './modules/share-links/share-links.routes';
+import shareLinksPublicRoutes from './modules/share-links/share-links-public.routes';
+import guestsRoutes from './modules/guests/guests.routes';
+import guestRegistrationRoutes from './modules/guests/guests-public.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -38,7 +45,19 @@ export async function buildApp(): Promise<FastifyInstance> {
     env: config.NODE_ENV,
   }));
 
+  // ── Public routes (no auth required) ─────────────────────────────────────────
   await app.register(authRoutes, { prefix: '/auth' });
+  await app.register(guestRegistrationRoutes, { prefix: '/register' });
+  await app.register(shareLinksPublicRoutes, { prefix: '/share-links' });
+
+  // ── Protected routes (tenant context applied via onRequest hook) ──────────────
+  await app.register(async function protectedScope(inner) {
+    await inner.register(tenantPlugin);
+    await inner.register(eventsRoutes, { prefix: '/events' });
+    await inner.register(keyholdersRoutes, { prefix: '/keyholders' });
+    await inner.register(shareLinksRoutes, { prefix: '/share-links' });
+    await inner.register(guestsRoutes, { prefix: '/guests' });
+  });
 
   return app;
 }

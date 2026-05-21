@@ -1,10 +1,23 @@
-// Guest-facing PWA — Registration, Ticketera, Wallet
-// Routes and screens built in Phase 1 (Sprints 2–4)
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import RegisterPage from './pages/RegisterPage';
+import ConfirmationPage from './pages/ConfirmationPage';
+
 export default function App() {
   return (
-    <div style={{ fontFamily: 'sans-serif', padding: '2rem' }}>
-      <h1>Phase 1+ — Guest App</h1>
-      <p>Web client coming in Sprint 2.</p>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/r/:token" element={<RegisterPage />} />
+        <Route path="/r/:token/done" element={<ConfirmationPage />} />
+        <Route
+          path="*"
+          element={
+            <div style={{ fontFamily: 'sans-serif', padding: '2rem', color: '#f0f0f0', background: '#0f0f0f', minHeight: '100vh' }}>
+              <h1>Phase 1+ — Guest App</h1>
+              <p>Accede mediante un enlace de invitación.</p>
+            </div>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
   );
 }
