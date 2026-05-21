@@ -14,6 +14,8 @@ import shareLinksPublicRoutes from './modules/share-links/share-links-public.rou
 import guestsRoutes from './modules/guests/guests.routes';
 import guestRegistrationRoutes from './modules/guests/guests-public.routes';
 import doorRoutes from './modules/door/door.routes';
+import productsRoutes from './modules/products/products.routes';
+import ordersRoutes from './modules/orders/orders.routes';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -59,6 +61,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     await inner.register(shareLinksRoutes, { prefix: '/share-links' });
     await inner.register(guestsRoutes, { prefix: '/guests' });
     await inner.register(doorRoutes, { prefix: '/door' });
+    await inner.register(productsRoutes, { prefix: '/products' });
+    await inner.register(ordersRoutes, { prefix: '/orders' });
   });
 
   return app;

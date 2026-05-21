@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { get, post, patch, ApiError } from '../api/client';
+import { get, post, patch, del, ApiError } from '../api/client';
 
 interface Event {
   id: string; name: string; description: string | null;
@@ -12,13 +12,20 @@ interface PassTier {
   id: string; name: string; description: string | null;
   price: string; currency: string; max_quantity: number | null; quantity_sold: number;
 }
+interface Product {
+  id: string; name: string; type: 'bottle' | 'drink' | 'shot'; sku: string | null; is_active: boolean;
+}
+interface PassTierItem {
+  id: string; product_id: string; product_name: string; product_type: string;
+  quantity: number; pass_tier_id: string;
+}
 interface GuestEvent {
   id: string; status: string; invited_at: string; qr_token: string | null;
   first_name: string; last_name: string; phone: string; gender: string;
   tier_name: string | null; price: string | null; currency: string | null;
 }
 
-type Tab = 'guests' | 'pass-tiers';
+type Tab = 'guests' | 'pass-tiers' | 'products';
 
 const PHASE_ORDER = ['phase_0', 'phase_1', 'phase_2', 'phase_3', 'phase_4', 'closed'];
 const PHASE_LABEL: Record<string, string> = {
@@ -54,17 +61,34 @@ export default function EventDetailPage() {
   const [statusLoading, setStatusLoading] = useState<string | null>(null);
   const [phaseLoading, setPhaseLoading] = useState(false);
   const [phaseError, setPhaseError] = useState<string | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [tierItems, setTierItems] = useState<Record<string, PassTierItem[]>>({});
+  const [newProduct, setNewProduct] = useState({ name: '', type: 'drink' as Product['type'], sku: '' });
+  const [savingProduct, setSavingProduct] = useState(false);
+  const [productError, setProductError] = useState<string | null>(null);
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [addItemState, setAddItemState] = useState<Record<string, { productId: string; quantity: string }>>({});
 
   const fetchAll = useCallback(async () => {
     if (!id) return;
-    const [ev, ts, gs] = await Promise.all([
+    const [ev, ts, gs, prods] = await Promise.all([
       get<Event>(`/events/${id}`),
       get<PassTier[]>(`/events/${id}/pass-tiers`),
       get<GuestEvent[]>(`/guests?eventId=${id}`),
+      get<Product[]>('/products'),
     ]);
     setEvent(ev);
     setTiers(ts);
     setGuests(gs);
+    setProducts(prods);
+    // Load tier items for each tier
+    const items: Record<string, PassTierItem[]> = {};
+    await Promise.all(
+      ts.map(async (t) => {
+        items[t.id] = await get<PassTierItem[]>(`/products/pass-tiers/${t.id}/items`);
+      }),
+    );
+    setTierItems(items);
   }, [id]);
 
   useEffect(() => { void fetchAll(); }, [fetchAll]);
@@ -206,11 +230,15 @@ export default function EventDetailPage() {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(['guests', 'pass-tiers'] as Tab[]).map((t) => (
-          <button key={t} style={{ ...s.tabBtn, ...(tab === t ? s.tabActive : {}) }} onClick={() => setTab(t)}>
-            {t === 'guests' ? `Invitados (${guests.length})` : `Pass Tiers (${tiers.length})`}
-          </button>
-        ))}
+        <button style={{ ...s.tabBtn, ...(tab === 'guests' ? s.tabActive : {}) }} onClick={() => setTab('guests')}>
+          Invitados ({guests.length})
+        </button>
+        <button style={{ ...s.tabBtn, ...(tab === 'pass-tiers' ? s.tabActive : {}) }} onClick={() => setTab('pass-tiers')}>
+          Pass Tiers ({tiers.length})
+        </button>
+        <button style={{ ...s.tabBtn, ...(tab === 'products' ? s.tabActive : {}) }} onClick={() => setTab('products')}>
+          Productos ({products.length})
+        </button>
       </div>
 
       {/* Pass Tiers tab */}
@@ -243,6 +271,60 @@ export default function EventDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Products tab */}
+      {tab === 'products' && (
+        <ProductsTab
+          products={products}
+          tiers={tiers}
+          tierItems={tierItems}
+          newProduct={newProduct}
+          setNewProduct={setNewProduct}
+          showForm={showProductForm}
+          setShowForm={setShowProductForm}
+          savingProduct={savingProduct}
+          productError={productError}
+          addItemState={addItemState}
+          setAddItemState={setAddItemState}
+          onCreateProduct={async (e) => {
+            e.preventDefault();
+            setSavingProduct(true);
+            setProductError(null);
+            try {
+              await post('/products', { name: newProduct.name, type: newProduct.type, sku: newProduct.sku || undefined });
+              setNewProduct({ name: '', type: 'drink', sku: '' });
+              setShowProductForm(false);
+              await fetchAll();
+            } catch (err) {
+              setProductError(err instanceof ApiError ? err.message : 'Error');
+            } finally {
+              setSavingProduct(false);
+            }
+          }}
+          onAddTierItem={async (tierId) => {
+            const s = addItemState[tierId];
+            if (!s?.productId || !s.quantity) return;
+            try {
+              await post(`/products/pass-tiers/${tierId}/items`, {
+                productId: s.productId,
+                quantity: parseInt(s.quantity, 10),
+              });
+              setAddItemState((prev) => ({ ...prev, [tierId]: { productId: '', quantity: '' } }));
+              await fetchAll();
+            } catch (err) {
+              setProductError(err instanceof ApiError ? err.message : 'Error');
+            }
+          }}
+          onRemoveTierItem={async (tierId, productId) => {
+            try {
+              await del(`/products/pass-tiers/${tierId}/items/${productId}`);
+              await fetchAll();
+            } catch (err) {
+              setProductError(err instanceof ApiError ? err.message : 'Error');
+            }
+          }}
+        />
       )}
 
       {/* Guests tab */}
@@ -310,6 +392,126 @@ const actionS: Record<string, React.CSSProperties> = {
   btn: { border: 'none', borderRadius: '4px', padding: '0.3rem 0.6rem', color: '#f0f0f0', fontSize: '0.78rem', cursor: 'pointer', marginRight: '0.3rem' },
 };
 
+const TYPE_LABEL: Record<string, string> = { bottle: 'Botella', drink: 'Bebida', shot: 'Shot' };
+const TYPE_COLOR: Record<string, string> = { bottle: '#d4af37', drink: '#4a9eff', shot: '#9c6eff' };
+
+function ProductsTab({
+  products, tiers, tierItems, newProduct, setNewProduct, showForm, setShowForm,
+  savingProduct, productError, addItemState, setAddItemState,
+  onCreateProduct, onAddTierItem, onRemoveTierItem,
+}: {
+  products: Product[];
+  tiers: PassTier[];
+  tierItems: Record<string, PassTierItem[]>;
+  newProduct: { name: string; type: Product['type']; sku: string };
+  setNewProduct: React.Dispatch<React.SetStateAction<{ name: string; type: Product['type']; sku: string }>>;
+  showForm: boolean;
+  setShowForm: (v: boolean) => void;
+  savingProduct: boolean;
+  productError: string | null;
+  addItemState: Record<string, { productId: string; quantity: string }>;
+  setAddItemState: React.Dispatch<React.SetStateAction<Record<string, { productId: string; quantity: string }>>>;
+  onCreateProduct: (e: React.FormEvent) => void;
+  onAddTierItem: (tierId: string) => void;
+  onRemoveTierItem: (tierId: string, productId: string) => void;
+}) {
+  return (
+    <div>
+      {/* Product catalog */}
+      <div style={s.sectionHeader}>
+        <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>Catálogo de productos</span>
+        <button style={s.primaryBtn} onClick={() => setShowForm(!showForm)}>
+          {showForm ? 'Cancelar' : '+ Agregar producto'}
+        </button>
+      </div>
+      {showForm && (
+        <form onSubmit={onCreateProduct} style={s.formInline}>
+          <input style={s.input} placeholder="Nombre" value={newProduct.name}
+            onChange={(e) => setNewProduct((p) => ({ ...p, name: e.target.value }))} required />
+          <select style={{ ...s.input, flex: 'none', width: '120px' }} value={newProduct.type}
+            onChange={(e) => setNewProduct((p) => ({ ...p, type: e.target.value as Product['type'] }))}>
+            <option value="drink">Bebida</option>
+            <option value="bottle">Botella</option>
+            <option value="shot">Shot</option>
+          </select>
+          <input style={{ ...s.input, width: '100px' }} placeholder="SKU" value={newProduct.sku}
+            onChange={(e) => setNewProduct((p) => ({ ...p, sku: e.target.value }))} />
+          {productError && <span style={{ color: '#e55', fontSize: '0.85rem' }}>{productError}</span>}
+          <button style={s.primaryBtn} type="submit" disabled={savingProduct}>{savingProduct ? '...' : 'Guardar'}</button>
+        </form>
+      )}
+      <div style={s.productCatalog}>
+        {products.length === 0
+          ? <p style={{ color: '#666' }}>Sin productos aún.</p>
+          : products.map((p) => (
+            <div key={p.id} style={s.productChip}>
+              <span style={{ fontWeight: 600 }}>{p.name}</span>
+              <span style={{ ...s.typeBadge, backgroundColor: TYPE_COLOR[p.type] ?? '#555' }}>
+                {TYPE_LABEL[p.type]}
+              </span>
+              {p.sku && <span style={{ color: '#666', fontSize: '0.78rem' }}>{p.sku}</span>}
+            </div>
+          ))
+        }
+      </div>
+
+      {/* Pass tier items */}
+      {tiers.length > 0 && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: '1rem' }}>Contenido de pass tiers</div>
+          {tiers.map((tier) => {
+            const items = tierItems[tier.id] ?? [];
+            const addState = addItemState[tier.id] ?? { productId: '', quantity: '' };
+            return (
+              <div key={tier.id} style={s.tierBundle}>
+                <div style={s.tierBundleHeader}>
+                  <span style={{ fontWeight: 700 }}>{tier.name}</span>
+                  <span style={{ color: '#888', fontSize: '0.82rem' }}>{tier.currency} {parseFloat(tier.price).toFixed(2)}</span>
+                </div>
+                {items.length > 0 && (
+                  <div style={s.tierItemList}>
+                    {items.map((item) => (
+                      <div key={item.id} style={s.tierItemRow}>
+                        <span style={{ ...s.typeBadge, backgroundColor: TYPE_COLOR[item.product_type] ?? '#555' }}>
+                          {TYPE_LABEL[item.product_type]}
+                        </span>
+                        <span>{item.product_name}</span>
+                        <span style={{ color: '#d4af37', fontWeight: 700 }}>×{item.quantity}</span>
+                        <button style={s.removeBtn} onClick={() => onRemoveTierItem(tier.id, item.product_id)}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {products.length > 0 && (
+                  <div style={s.addItemRow}>
+                    <select style={{ ...s.input, flex: 1, fontSize: '0.82rem', padding: '0.4rem' }}
+                      value={addState.productId}
+                      onChange={(e) => setAddItemState((prev) => ({ ...prev, [tier.id]: { ...addState, productId: e.target.value } }))}>
+                      <option value="">Selecciona producto</option>
+                      {products.filter((p) => !items.find((i) => i.product_id === p.id)).map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} ({TYPE_LABEL[p.type]})</option>
+                      ))}
+                    </select>
+                    <input style={{ ...s.input, width: '70px', fontSize: '0.82rem', padding: '0.4rem' }}
+                      type="number" min="1" placeholder="Cant."
+                      value={addState.quantity}
+                      onChange={(e) => setAddItemState((prev) => ({ ...prev, [tier.id]: { ...addState, quantity: e.target.value } }))} />
+                    <button style={{ ...s.primaryBtn, padding: '0.4rem 0.75rem', marginTop: 0 }}
+                      onClick={() => onAddTierItem(tier.id)}
+                      disabled={!addState.productId || !addState.quantity}>
+                      + Agregar
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const s: Record<string, React.CSSProperties> = {
   backLink: { color: '#888', textDecoration: 'none', fontSize: '0.9rem', display: 'inline-block', marginBottom: '1.25rem' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' },
@@ -342,6 +544,15 @@ const s: Record<string, React.CSSProperties> = {
   tierName: { fontWeight: 600, flex: 1 },
   tierPrice: { color: '#d4af37', fontWeight: 700 },
   tierMeta: { color: '#888', fontSize: '0.85rem' },
+  productCatalog: { display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' },
+  productChip: { display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#1a1a1a', borderRadius: '7px', padding: '0.5rem 0.75rem', fontSize: '0.88rem' },
+  typeBadge: { fontSize: '0.65rem', fontWeight: 700, borderRadius: '3px', padding: '0.15rem 0.4rem', color: '#fff', textTransform: 'uppercase' as const, letterSpacing: '0.04em' },
+  tierBundle: { backgroundColor: '#1a1a1a', borderRadius: '8px', padding: '0.9rem 1rem', marginBottom: '0.75rem' },
+  tierBundleHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' },
+  tierItemList: { display: 'flex', flexDirection: 'column' as const, gap: '0.3rem', marginBottom: '0.6rem' },
+  tierItemRow: { display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem' },
+  removeBtn: { background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, marginLeft: 'auto' },
+  addItemRow: { display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' as const },
   tableWrap: { overflowX: 'auto' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' },
   th: { textAlign: 'left', padding: '0.6rem 0.75rem', color: '#888', fontWeight: 500, borderBottom: '1px solid #222', whiteSpace: 'nowrap' },

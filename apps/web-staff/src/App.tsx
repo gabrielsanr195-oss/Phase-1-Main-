@@ -4,10 +4,12 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
 import DoorPage from './pages/DoorPage';
 import KeyholderDashboard from './pages/KeyholderDashboard';
+import WaiterPage from './pages/WaiterPage';
 
 function HomeRoute() {
   const { user } = useAuth();
   if (user?.role === 'keyholder') return <KeyholderDashboard />;
+  if (user?.role === 'waiter') return <WaiterPage />;
   return <DoorPage />;
 }
 
