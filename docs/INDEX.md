@@ -3,8 +3,8 @@
 > Source of truth for session state. Update at the end of every session.
 
 ## Estado actual
-**Sprint**: 4 — Keyholder self-service + Guest QR display + Event phase progression
-**Last session**: Sprint 4 complete — keyholder dashboard (web-staff), guest status/QR page (web-client), event phase API + admin UI
+**Sprint**: 4 (audit fixes applied) — correct auto-confirmation, ratio enforcement, capacity dashboard
+**Last session**: Compliance audit fixes — registerViaShareLink now auto-confirms per link type, ratio_gated enforces gender ratio, web-admin EventDetailPage has capacity/ratio stats panel
 **Next**: Sprint 5 — Waiter/order flow (web-staff) + inventory management
 
 ## Completed ✅
@@ -33,9 +33,11 @@
 - [x] S4-5: web-staff — KeyholderDashboard: assigned events, share link creation (select tier + type), own guest list
 - [x] S4-6: web-staff — role-based routing: keyholder → dashboard, door → scan page
 - [x] S4-7: web-admin — EventDetailPage: event phase badge + one-click advance button
+- [x] S4-8: API — registerViaShareLink auto-confirms (open/threshold_gated) + ratio_gated gender check
+- [x] S4-9: web-admin — EventDetailPage capacity/ratio dashboard (spots, gender split, ratio vs target, en-lista queue)
 
 ## In progress 🔄
-_nothing — sprint 4 done_
+_nothing — audit fixes done, sprint 5 next_
 
 ## Key files
 | File | Purpose |
